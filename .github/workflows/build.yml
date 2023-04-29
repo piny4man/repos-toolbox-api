@@ -1,0 +1,22 @@
+name: "Pull Request Build validation"
+run-name: 📋 ${{ github.actor }} is checking the api
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+jobs:
+  build_and_test:
+    name: Build Frontend and API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: davidB/rust-cargo-make@v1
+      - name: Run cargo fmt
+        run: cargo make format
+      - name: Run cargo clippy
+        run: cargo make clippy
