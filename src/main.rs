@@ -39,8 +39,6 @@ async fn search_repository(
     let page = octocrab::instance()
         .search()
         .repositories(&params.repo)
-        .sort("stars")
-        .order("desc")
         .send()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
