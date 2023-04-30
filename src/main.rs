@@ -53,7 +53,9 @@ async fn search_repository(
 }
 
 #[debug_handler]
-async fn get_repository(Json(payload): Json<RepoRequest>) -> Result<Json<Repository>, (StatusCode, String)> {
+async fn get_repository(
+    Json(payload): Json<RepoRequest>,
+) -> Result<Json<Repository>, (StatusCode, String)> {
     let repo = octocrab::instance()
         .repos(payload.owner, payload.repo)
         .get()
