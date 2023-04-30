@@ -14,6 +14,12 @@ struct SearchParams {
     repo: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct RepoRequest {
+    owner: String,
+    repo: String,
+}
+
 #[derive(Serialize)]
 struct RepositoryPage {
     items: Vec<Repository>,
@@ -46,6 +52,17 @@ async fn search_repository(
     Ok(Json(RepositoryPage::from(page)))
 }
 
+#[debug_handler]
+async fn get_repository(Json(payload): Json<RepoRequest>) -> Result<Json<Repository>, (StatusCode, String)> {
+    let repo = octocrab::instance()
+        .repos(payload.owner, payload.repo)
+        .get()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(repo))
+}
+
 #[shuttle_runtime::main]
 async fn axum() -> shuttle_axum::ShuttleAxum {
     let cors = CorsLayer::new()
@@ -55,6 +72,7 @@ async fn axum() -> shuttle_axum::ShuttleAxum {
 
     let router = Router::new()
         .route("/search", get(search_repository))
+        .route("/repo", get(get_repository))
         .layer(cors);
 
     tracing::info!("Starting server");
