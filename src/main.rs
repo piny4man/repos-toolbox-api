@@ -1,12 +1,12 @@
 use axum::{
-    routing::get,
-    Router,
+    extract::Query,
     http::{self, StatusCode},
-    Json, extract::Query,
+    routing::get,
+    Json, Router,
 };
 use axum_macros::debug_handler;
-use octocrab::{Page, models::Repository};
-use serde::{Serialize, Deserialize};
+use octocrab::{models::Repository, Page};
+use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Debug, Deserialize)]
@@ -33,7 +33,9 @@ impl From<Page<Repository>> for RepositoryPage {
 }
 
 #[debug_handler]
-async fn search_repository(Query(params): Query<SearchParams>) -> Result<Json<RepositoryPage>, (StatusCode, String)> {
+async fn search_repository(
+    Query(params): Query<SearchParams>,
+) -> Result<Json<RepositoryPage>, (StatusCode, String)> {
     let page = octocrab::instance()
         .search()
         .repositories(&params.repo)
