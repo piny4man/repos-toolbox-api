@@ -115,10 +115,7 @@ async fn get_repository(
     let url = repo.clone().languages_url.unwrap();
     let languages: HashMap<String, u64> = get_repository_languages(url).await?;
 
-    Ok(Json(RepoResponse {
-        repo,
-        languages,
-    }))
+    Ok(Json(RepoResponse { repo, languages }))
 }
 
 #[shuttle_runtime::main]
