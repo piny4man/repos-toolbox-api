@@ -8,6 +8,7 @@ use axum::{
 };
 use axum_macros::debug_handler;
 use octocrab::{models::Repository, Page};
+use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -46,40 +47,8 @@ impl From<Page<Repository>> for RepositoryPage {
     }
 }
 
-#[debug_handler]
-async fn search_repository(
-    Query(params): Query<SearchParams>,
-) -> Result<Json<RepositoryPage>, (StatusCode, String)> {
-    let page = octocrab::instance()
-        .search()
-        .repositories(&params.repo)
-        .send()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(Json(RepositoryPage::from(page)))
-}
-
-// TODO Simplify code
-#[debug_handler]
-async fn get_repository(
-    Json(payload): Json<RepoRequest>,
-) -> Result<Json<RepoResponse>, (StatusCode, String)> {
-    let repo = octocrab::instance()
-        .repos(payload.owner, payload.repo)
-        .get()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    // tracing::info!("{:?}", repo);
-    // let languages = reqwest::get(repo.clone().languages_url.unwrap())
-    //     .await
-    //     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    //     .json::<HashMap<String, u64>>()
-    //     .await
-    //     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let url = repo.clone().languages_url.unwrap();
-    let response = reqwest::Client::new()
+async fn get_repository_languages(url: Url) -> Result<HashMap<String, u64>, (StatusCode, String)> {
+    let response = Client::new()
         .get(url)
         .header("User-Agent", "repos-toolbox-api")
         .send()
@@ -99,12 +68,56 @@ async fn get_repository(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let response_data: HashMap<String, u64> = serde_json::from_str(&response_text)
+    let languages: HashMap<String, u64> = serde_json::from_str(&response_text)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(languages)
+}
+
+#[debug_handler]
+async fn search_repository(
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Vec<RepoResponse>>, (StatusCode, String)> {
+    let page = octocrab::instance()
+        .search()
+        .repositories(&params.repo)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut repos_response = Vec::new();
+
+    for repo in page.items {
+        let url = repo.clone().languages_url.unwrap();
+        let repo_languages = get_repository_languages(url).await;
+        match repo_languages {
+            Ok(languages) => repos_response.push(RepoResponse { repo, languages }),
+            Err(e) => {
+                tracing::error!("Error fetching languages for repo: {}", e.1);
+            }
+        }
+    }
+
+    Ok(Json(repos_response))
+}
+
+// TODO Simplify code
+#[debug_handler]
+async fn get_repository(
+    Json(payload): Json<RepoRequest>,
+) -> Result<Json<RepoResponse>, (StatusCode, String)> {
+    let repo = octocrab::instance()
+        .repos(payload.owner, payload.repo)
+        .get()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let url = repo.clone().languages_url.unwrap();
+    let languages: HashMap<String, u64> = get_repository_languages(url).await?;
 
     Ok(Json(RepoResponse {
         repo,
-        languages: response_data,
+        languages,
     }))
 }
 
